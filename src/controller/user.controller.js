@@ -152,4 +152,144 @@ const completeUserProfile = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, user, "profile completed successfully"));
 });
 
-export { registerUser, loginUser, completeUserProfile };
+const logoutUser = asyncHandler(async (req, res) => {
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $unset: { refreshToken: 1 },
+        },
+        {
+            new: true,
+        }
+    ).select("-password -refreshToken");
+
+    const options = {
+        httpOnly: true,
+        secure: true,
+    };
+
+    return res
+        .status(200)
+        .clearCookie("accessToken", options)
+        .clearCookie("refreshToken", options)
+        .json(new ApiResponse(200, user, "user logout successfully"));
+});
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+    const incomingRefreshToken =
+        req.cookies.refreshToken || req.body.refreshToken;
+    if (!incomingRefreshToken) {
+        throw new ApiError(401, "unauthorized request");
+    }
+    try {
+        const decodedToken = jwt.verify(
+            incomingRefreshToken,
+            process.env.REFRESH_TOKEN_SECRET
+        );
+        const user = await User.findById(decodedToken?._id);
+        if (!user) {
+            throw new ApiError(401, "invalid refresh token");
+        }
+
+        if (incomingRefreshToken !== user?.refreshToken) {
+            throw new ApiError(401, "refresh token is expired or used");
+        }
+
+        const options = {
+            httpOnly: true,
+            secure: true,
+        };
+
+        const { accessToken, newrefreshToken } =
+            await generateAccessAndRefreshTokens(user._id);
+
+        return res
+            .status(200)
+            .cookie("accessToken", accessToken, options)
+            .cookie("refreshToken", newrefreshToken, options)
+            .json(
+                new ApiResponse(
+                    200,
+                    { accessToken, refreshToken: newrefreshToken },
+                    "access token refreshed succcessfully"
+                )
+            );
+    } catch (error) {
+        throw new ApiError(401, error?.message || "invalid refresh token");
+    }
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+    if (!userId) {
+        throw new ApiError(401, "unauthorized request");
+    }
+
+    const user = User.findById(userId).select("-password -refreshToken");
+    if (!user) {
+        throw new ApiError(404, "user not found");
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "user fetched successfully"));
+});
+
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    if (!newPassword || !oldPassword) {
+        throw new ApiError(401, "all field are required");
+    }
+
+    const userId = req.user?._id;
+    const user = await User.findById(userId);
+    const isPasswordValid = user.isPasswordCorrect(oldPassword);
+    if (!isPasswordValid) {
+        throw new ApiError(401, "old password is incorrect");
+    }
+    user.password = newPassword;
+    await user.save({ validateBeforeSave: false });
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "password update successfully"));
+});
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+    const { email, fullName, department, course, year, phone } = req.body;
+
+    if (
+        [email, fullName, department, course, year, phone].some(
+            (field) => field?.trim() === ""
+        )
+    ) {
+        throw new ApiError(400, "all fields are required");
+    }
+
+    const userId = req.user?._id;
+    const user = await User.findByIdAndUpdate(userId, {
+        $set: {
+            email,
+            fullName,
+            department,
+            course,
+            year,
+            phone,
+        },
+    },{new: true}).select('-password -refreshToken');
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,user,"udate account details successfully"));
+});
+export {
+    registerUser,
+    loginUser,
+    completeUserProfile,
+    logoutUser,
+    refreshAccessToken,
+    refreshAccessToken,
+    getCurrentUser,
+    changeCurrentPassword,
+    updateAccountDetails
+};
