@@ -39,7 +39,7 @@ const postSchema = new Schema(
         },
         status: {
             type: String,
-            enum: ["available", "reserved", "sold"],
+            enum: ["available", "sold"],
             default: "available",
         },
         images: {
@@ -51,10 +51,6 @@ const postSchema = new Schema(
             required: true,
             min: 0,
             index: true,
-        },
-        expiresAt: {
-            type: Date,
-            index: { expires: 0 },
         },
     },
     { timestamps: true }
