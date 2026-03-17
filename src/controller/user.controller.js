@@ -3,12 +3,15 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
         const user = await User.findById(userId);
-        const accessToken = user.generateAccessToken();
-        const refreshToken = user.generateRefreshToken();
+
+        const accessToken =  user.generateAccessToken();
+        const refreshToken =  user.generateRefreshToken();
+
         user.refreshToken = refreshToken;
         await user.save({ validateBeforeSave: false });
 
@@ -28,9 +31,9 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "all fields are  required");
     }
 
-    const existedUser = User.findOne({
+    const existedUser = await User.findOne({
         $or: [{ userName }, { email }],
-    });
+    }); 
 
     if (existedUser) {
         throw new ApiError(400, "user with email or username already existed");
@@ -66,6 +69,7 @@ const loginUser = asyncHandler(async (req, res) => {
     const user = await User.findOne({
         $or: [{ userName }, { email }],
     });
+    console.log(user)
     if (!user) {
         throw new ApiError(404, "user not found");
     }
@@ -109,29 +113,29 @@ const completeUserProfile = asyncHandler(async (req, res) => {
     const { fullName, department, course, year, phone } = req.body;
 
     if (
-        [fullName, department, course, year, phone].some(
-            (field) => field?.trim() === ""
+        [fullName, department, course, year, phone].some((field) => !field || field.toString().trim() === "")
         )
-    ) {
+     {
         throw new ApiError(400, "all fields are required");
     }
 
     const existedUserId = req.user._id;
 
     const avatarLocalPath = req.files?.avatar?.[0]?.path;
+    
     if (!avatarLocalPath) {
         throw new ApiError(400, "avatar file is required");
     }
 
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     if (!avatar) {
-        throw new ApiError(400, "failed to upload avatar on cloundinary");
+        throw new ApiError(500, "failed to upload avatar on cloudinary");
     }
     const user = await User.findByIdAndUpdate(
         existedUserId,
         {
             fullName,
-            avatar: avatar.url,
+            avatar: avatar?.url,
             department,
             course,
             year,
@@ -191,7 +195,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
             throw new ApiError(401, "invalid refresh token");
         }
 
-        if (incomingRefreshToken !== user?.refreshToken) {
+        if (incomingRefreshToken ==! user?.refreshToken) {
             throw new ApiError(401, "refresh token is expired or used");
         }
 
@@ -199,7 +203,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
             httpOnly: true,
             secure: true,
         };
-
+        
         const { accessToken, newrefreshToken } =
             await generateAccessAndRefreshTokens(user._id);
 
@@ -225,7 +229,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
         throw new ApiError(401, "unauthorized request");
     }
 
-    const user = User.findById(userId).select("-password -refreshToken");
+    const user = await User.findById(userId).select("-password -refreshToken");
     if (!user) {
         throw new ApiError(404, "user not found");
     }
@@ -287,7 +291,6 @@ export {
     loginUser,
     completeUserProfile,
     logoutUser,
-    refreshAccessToken,
     refreshAccessToken,
     getCurrentUser,
     changeCurrentPassword,

@@ -1,5 +1,5 @@
 import { Message } from "../models/message.model";
-import { ApiError } from "../utils/ApiError";
+import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse";
 import { asyncHandler } from "../utils/asyncHandler";
 import { getSocketId } from "../utils/socket";
