@@ -3,14 +3,14 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-import jwt from "jsonwebtoken"
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
         const user = await User.findById(userId);
 
-        const accessToken =  user.generateAccessToken();
-        const refreshToken =  user.generateRefreshToken();
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
 
         user.refreshToken = refreshToken;
         await user.save({ validateBeforeSave: false });
@@ -33,7 +33,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
     const existedUser = await User.findOne({
         $or: [{ userName }, { email }],
-    }); 
+    });
 
     if (existedUser) {
         throw new ApiError(400, "user with email or username already existed");
@@ -69,7 +69,6 @@ const loginUser = asyncHandler(async (req, res) => {
     const user = await User.findOne({
         $or: [{ userName }, { email }],
     });
-    console.log(user)
     if (!user) {
         throw new ApiError(404, "user not found");
     }
@@ -113,16 +112,17 @@ const completeUserProfile = asyncHandler(async (req, res) => {
     const { fullName, department, course, year, phone } = req.body;
 
     if (
-        [fullName, department, course, year, phone].some((field) => !field || field.toString().trim() === "")
+        [fullName, department, course, year, phone].some(
+            (field) => !field || field.toString().trim() === ""
         )
-     {
+    ) {
         throw new ApiError(400, "all fields are required");
     }
 
     const existedUserId = req.user._id;
 
     const avatarLocalPath = req.files?.avatar?.[0]?.path;
-    
+
     if (!avatarLocalPath) {
         throw new ApiError(400, "avatar file is required");
     }
@@ -195,7 +195,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
             throw new ApiError(401, "invalid refresh token");
         }
 
-        if (incomingRefreshToken ==! user?.refreshToken) {
+        if (incomingRefreshToken == !user?.refreshToken) {
             throw new ApiError(401, "refresh token is expired or used");
         }
 
@@ -203,7 +203,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
             httpOnly: true,
             secure: true,
         };
-        
+
         const { accessToken, newrefreshToken } =
             await generateAccessAndRefreshTokens(user._id);
 
@@ -271,20 +271,24 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     }
 
     const userId = req.user?._id;
-    const user = await User.findByIdAndUpdate(userId, {
-        $set: {
-            email,
-            fullName,
-            department,
-            course,
-            year,
-            phone,
+    const user = await User.findByIdAndUpdate(
+        userId,
+        {
+            $set: {
+                email,
+                fullName,
+                department,
+                course,
+                year,
+                phone,
+            },
         },
-    },{new: true}).select('-password -refreshToken');
+        { new: true }
+    ).select("-password -refreshToken");
 
     return res
-    .status(200)
-    .json(new ApiResponse(200,user,"udate account details successfully"));
+        .status(200)
+        .json(new ApiResponse(200, user, "udate account details successfully"));
 });
 export {
     registerUser,
@@ -294,5 +298,5 @@ export {
     refreshAccessToken,
     getCurrentUser,
     changeCurrentPassword,
-    updateAccountDetails
+    updateAccountDetails,
 };
