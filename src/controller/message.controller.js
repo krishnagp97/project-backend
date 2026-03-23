@@ -1,9 +1,10 @@
-import { Message } from "../models/message.model";
+import { Message } from "../models/message.model.js";
+import { Post } from "../models/post.model.js";
 import { ApiError } from "../utils/ApiError.js";
-import { ApiResponse } from "../utils/ApiResponse";
-import { asyncHandler } from "../utils/asyncHandler";
-import { getSocketId } from "../utils/socket";
-import { getIO as io } from "../utils/socket";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { getSocketId, getIO } from "../utils/socket.js";
+import { User } from "../models/user.model.js";
 
 const sendMessage = asyncHandler(async (req, res) => {
     const { receiverId, postId, message } = req.body;
@@ -16,6 +17,20 @@ const sendMessage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "you can not send message to yourself");
     }
 
+    const post = await Post.findById(postId);
+    if (!post) {
+        throw new ApiError(404, "Post not found");
+    }
+
+    const receiver = await User.findById(receiverId);
+    if (!receiver) {
+        throw new ApiError(404, "receiver not found");
+    }
+
+    if (!post.owner.equals(req.user._id) && !post.owner.equals(receiverId)) {
+        throw new ApiError(403, "you are not allowed to chat on this post");
+    }
+
     const newMessage = await Message.create({
         senderId: req.user._id,
         receiverId,
@@ -23,14 +38,20 @@ const sendMessage = asyncHandler(async (req, res) => {
         postId,
     });
 
-    const receiverSocketId = getSocketId(receiverId);
-    if (receiverSocketId) {
-        io.to(receiverSocketId).emit("newMessage", newMessage);
+    const io = getIO();
+
+    if (io) {
+        const senderSocketId = getSocketId(req.user._id.toString());
+        const receiverSocketId = getSocketId(receiverId);
+
+        [senderSocketId, receiverSocketId].forEach((socketId) => {
+            if (socketId) io.to(socketId).emit("newMessage", newMessage);
+        });
     }
 
     return res
         .status(201)
-        .json(new ApiResponse(201, newMessage, "message sended successfully"));
+        .json(new ApiResponse(201, newMessage, "message sent successfully"));
 });
 
 const getConversation = asyncHandler(async (req, res) => {
@@ -64,6 +85,7 @@ const deleteMessage = asyncHandler(async (req, res) => {
     }
     await Message.findByIdAndDelete(messageId);
 
+    const io = getIO();
     const senderSocketId = getSocketId(message.senderId.toString());
     const receiverSocketId = getSocketId(message.receiverId.toString());
 
@@ -93,6 +115,7 @@ const markAsSeen = asyncHandler(async (req, res) => {
         { $set: { isRead: true } }
     );
 
+    const io = getIO();
     const senderSocketId = getSocketId(senderId);
     if (senderSocketId) {
         io.to(senderSocketId).emit("messageSeen", { postId });

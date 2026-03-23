@@ -1,18 +1,20 @@
 import { Server } from "socket.io";
+import dotenv from "dotenv";
+dotenv.config();
 
 let io;
-const userSocketMap = {}; 
+const userSocketMap = {};
 
 export const getSocketId = (userId) => userSocketMap[userId];
 
 export const getIO = () => {
-    if (!io) throw new Error("socket.io not initialized");
+    if (!io) throw new Error("socket not initialized");
     return io;
 };
 
 export const initSocket = (server) => {
     io = new Server(server, {
-        cors: { origin: process.env.CLIENT_URL }
+        cors: { origin: process.env.CORS_ORIGIN },
     });
 
     io.on("connection", (socket) => {
@@ -22,9 +24,19 @@ export const initSocket = (server) => {
 
         io.emit("onlineUsers", Object.keys(userSocketMap));
 
+        socket.on("typing", ({ senderId, receiverId }) => {
+            const receiverSocketId = userSocketMap[receiverId];
+
+            if (receiverSocketId) {
+                io.to(receiverSocketId).emit("typing", senderId);
+            }
+        });
+
         socket.on("disconnect", () => {
-            delete userSocketMap[userId];
-            io.emit("onlineUsers", Object.keys(userSocketMap));
+            if (userId) {
+                delete userSocketMap[userId];
+                io.emit("onlineUsers", Object.keys(userSocketMap));
+            }
         });
     });
 

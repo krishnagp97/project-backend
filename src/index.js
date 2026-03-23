@@ -6,10 +6,10 @@ import { initSocket } from "./utils/socket.js";
 dotenv.config();
 
 const server = http.createServer(app);
-initSocket(server);
 
 ConnectDB()
     .then(() => {
+        initSocket(server);
         server.listen(process.env.PORT || 8000, () => {
             console.log(`server listen on port ${process.env.PORT}`);
         });
